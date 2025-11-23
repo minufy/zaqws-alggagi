@@ -1,6 +1,7 @@
 import sys
 import pygame
 from enum import Enum
+
 pygame.init()
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
@@ -9,15 +10,20 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 clock = pygame.time.Clock()
 
 UNIT = 32
+BOARD_SIZE = UNIT * (19 - 1)
+
+MAX_VELOCITY = UNIT * 30
+FRICTION = 0.9
+
+OFFSET_X = (SCREEN_WIDTH - BOARD_SIZE) / 2
+OFFSET_Y = (SCREEN_HEIGHT - BOARD_SIZE) / 2
+
 COLOR_BG = "#000000"
 COLOR_FG = "#b9b9b9"
 COLOR_WHITE = "#eeeeee"
 COLOR_BLACK = "#222222"
 COLOR_BOARD = "#ffc17a"
 
-BOARD_SIZE = UNIT * 19
-OFFSET_X = (SCREEN_WIDTH - BOARD_SIZE) / 2
-OFFSET_Y = (SCREEN_HEIGHT - BOARD_SIZE) / 2
 
 class Type(Enum):
     WHITE = COLOR_WHITE
@@ -25,19 +31,16 @@ class Type(Enum):
 
 class Al:
     def __init__(self, x, y, type):
-        global total_index
-        self.index = (total_index := total_index + 1)
+        self.index = len(al_list)
         self.x = x
         self.y = y
         self.type = type
         self.velocity = pygame.Vector2(0, 0)
 
-total_index = 0
-al_list = [
-    Al(10, 10, Type.WHITE),
-    Al(50, 50, Type.BLACK),
-]
-FRICTION = 0.9
+al_list = []
+for i in range(5):
+    al_list.append(Al(UNIT * 1 + i * UNIT * 4, UNIT * 3, Type.WHITE))
+    al_list.append(Al(UNIT * 1 + i * UNIT * 4, BOARD_SIZE - UNIT * 3, Type.BLACK))
 
 def collision(a, b):
     if (a.x - b.x) ** 2 + (a.y - b.y) ** 2 <= UNIT ** 2:
@@ -49,11 +52,13 @@ def draw_al(al_list):
         pygame.draw.circle(screen, al.type.value, (al.x + OFFSET_X, al.y + OFFSET_Y), UNIT / 2)
 
 def update_al(al_list: list[Al]):
-    for al in al_list:
+    for i, al in enumerate(al_list[:]):
         al.x += al.velocity.x
         al.y += al.velocity.y
         al.velocity.x *= FRICTION
         al.velocity.y *= FRICTION
+        if al.x + UNIT < 0 or al.x - UNIT > BOARD_SIZE or al.y + UNIT < 0 or al.y - UNIT > BOARD_SIZE:
+            al_list.pop(i)
         for other_al in al_list:
             if al == other_al:
                 continue
@@ -65,9 +70,9 @@ def update_al(al_list: list[Al]):
 
 def draw_board():
     pygame.draw.rect(screen, COLOR_BOARD, (OFFSET_X - UNIT, OFFSET_Y - UNIT, BOARD_SIZE + UNIT * 2, BOARD_SIZE + UNIT * 2))
-    for x in range(19 + 1):
+    for x in range(19):
         pygame.draw.line(screen, COLOR_BG, (x * UNIT + OFFSET_X, OFFSET_Y), (x * UNIT + OFFSET_X, BOARD_SIZE + OFFSET_Y), 1)
-    for y in range(19 + 1):
+    for y in range(19):
         pygame.draw.line(screen, COLOR_BG, (OFFSET_X, y * UNIT + OFFSET_Y), (BOARD_SIZE + OFFSET_X, y * UNIT + OFFSET_Y), 1)
 
 selected_al = None
@@ -96,6 +101,31 @@ def fire():
         selected_al.velocity.y = (click_y - mouse_y) / 10
     selected_al = None
 
+ais = {}
+def init_ais(ai_white, ai_black):
+    global ais
+    ais[Type.WHITE] = ai_white
+    ais[Type.BLACK] = ai_black
+
+def validate(al, vector, type):
+    if al.type != type:
+        return False
+    if vector.length() > MAX_VELOCITY:
+        return False
+    return True
+
+turn_index = 0
+def next_turn():
+    global turn_index
+    type = Type.WHITE if turn_index % 2 == 0 else Type.BLACK
+    al, vector = ais[type].think(al_list)
+    if validate(al, vector, type):
+        al.velocity = vector
+    turn_index += 1
+
+from testai import TestAI
+init_ais(TestAI(Type.WHITE), TestAI(Type.BLACK))
+
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -107,6 +137,9 @@ while True:
         if event.type == pygame.MOUSEBUTTONUP:
             if event.button == 1:
                 fire()
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                next_turn()
 
     screen.fill(COLOR_FG)
     draw_board()
