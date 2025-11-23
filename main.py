@@ -24,7 +24,6 @@ COLOR_WHITE = "#eeeeee"
 COLOR_BLACK = "#222222"
 COLOR_BOARD = "#ffc17a"
 
-
 class Type(Enum):
     WHITE = COLOR_WHITE
     BLACK = COLOR_BLACK
